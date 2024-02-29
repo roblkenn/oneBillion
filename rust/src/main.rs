@@ -1,7 +1,9 @@
 use std::fs::File;
-use std::io::{self, BufRead};
-use std::path::Path;
 use std::collections::HashMap;
+use std::io::BufRead;
+use std::io::BufReader;
+
+const BUFFER_SIZE: usize = 256 * 1000 * 1000;
 
 struct Station {
     n: u32,
@@ -12,46 +14,41 @@ struct Station {
 
 fn main() {    
     let mut stations: HashMap<String, Station> = HashMap::new();
+    let lines = BufReader::with_capacity(BUFFER_SIZE, File::open("../measurements.data").unwrap()).lines().flatten();
 
-    if let Ok(lines) = read_lines("../measurements.data") {
-        for line in lines.flatten() {
-            let parts = line.split(";").collect::<Vec<&str>>();
-            let station_name = parts[0].to_string();
-            let measurement: f32 = parts[1].parse().unwrap();
-            match stations.get_mut(&station_name) {
-                Some(station) => {
-                    station.n += 1;
-                    station.sum += measurement;
-                    if measurement < station.min {
-                        station.min = measurement;
-                    }
-                    if measurement > station.max {
-                        station.max = measurement;
-                    }
-                },
-                None => {
-                    stations.insert(station_name, Station {
-                        n: 1,
-                        sum: measurement,
-                        min: measurement,
-                        max: measurement
-                    });
+    for line in lines {
+        let mut line_split = line.split(";");
+        let station_name = line_split.next().unwrap().to_string();
+        let measurement: f32 = line_split.next().unwrap().parse().unwrap();
+        match stations.get_mut(&station_name) {
+            Some(station) => {
+                station.n += 1;
+                station.sum += measurement;
+                if measurement < station.min {
+                    station.min = measurement;
                 }
+                if measurement > station.max {
+                    station.max = measurement;
+                }
+            },
+            None => {
+                stations.insert(station_name, Station {
+                    n: 1,
+                    sum: measurement,
+                    min: measurement,
+                    max: measurement
+                });
             }
         }
     }
-    print_stations(&stations);
-}
 
-fn print_stations(stations: &HashMap<String, Station>) {
     print!("{{");
     let mut station_names = stations.keys().collect::<Vec<&String>>();
     station_names.sort();
-    for (station_name, should_add_comma) in station_names.iter().enumerate().map(|(i, s)| (s, i != station_names.len() - 1)) {
-        match stations.get(*station_name) {
+    for (station_name, should_add_comma) in station_names.iter().enumerate().map(|(i, s)| (*s, i != station_names.len() - 1)) {
+        match stations.get(station_name) {
             Some(station) => {
-                let mean = station.sum / station.n as f32;
-                print!("{}={:.1?}/{:.1?}/{:.1?}", station_name, station.min, mean, station.max);
+                print!("{}={:.1?}/{:.1?}/{:.1?}", station_name, station.min, station.sum / station.n as f32, station.max);
                 if should_add_comma {
                     print!(", ")
                 }
@@ -60,10 +57,4 @@ fn print_stations(stations: &HashMap<String, Station>) {
         }
     }
     print!("}}");
-}
-
-fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
-where P: AsRef<Path>, {
-    let file = File::open(filename)?;
-    Ok(io::BufReader::new(file).lines())
 }
