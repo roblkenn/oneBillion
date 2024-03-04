@@ -13,26 +13,47 @@ struct Station {
     min: f32,
     max: f32,
 }
+impl Station {
+    fn new(measurement: f32) -> Self {
+        Station {
+            n: 1,
+            sum: measurement,
+            min: measurement,
+            max: measurement,
+        }
+    }
+
+    fn merge(&mut self, other: &Station) {
+        self.n += other.n;
+        self.sum += other.sum;
+        if other.min < self.min {
+            self.min = other.min;
+        }
+        if other.max > self.max {
+            self.max = other.max;
+        }
+    }
+}
 
 fn main() {
     for number_of_threads in 1..16 {
         let start_time = Instant::now();
         one_billion(number_of_threads);
         let end_time = Instant::now();
-        println!("");
-        println!("");
+        println!();
+        println!();
         println!(
             "{} Threads with Elapsed time: {:?}",
             number_of_threads,
             end_time - start_time
         );
-        println!("");
+        println!();
     }
 }
 
 fn one_billion(number_of_threads: usize) {
     let partition_size = ONE_BILLION / number_of_threads;
-    let mut thread_handles = Vec::new();
+    let mut thread_handles = Vec::with_capacity(number_of_threads);
     for partition_index in 0..number_of_threads {
         let handle = thread::spawn(move || {
             let lines = read_lines("../measurements.data")
@@ -50,7 +71,7 @@ fn one_billion(number_of_threads: usize) {
                 insert_into_hashmap(&mut stations, station_name, measurement);
             }
 
-            return stations;
+            stations
         });
         thread_handles.push(handle);
     }
@@ -61,25 +82,10 @@ fn one_billion(number_of_threads: usize) {
         for (station_name, station) in stations.into_iter() {
             match final_stations.get_mut(&station_name) {
                 Some(final_station) => {
-                    final_station.n += station.n;
-                    final_station.sum += station.sum;
-                    if station.min < final_station.min {
-                        final_station.min = station.min;
-                    }
-                    if station.max > final_station.max {
-                        final_station.max = station.max;
-                    }
+                    final_station.merge(&station);
                 }
                 None => {
-                    final_stations.insert(
-                        station_name,
-                        Station {
-                            n: station.n,
-                            sum: station.sum,
-                            min: station.min,
-                            max: station.max,
-                        },
-                    );
+                    final_stations.insert(station_name, station);
                 }
             }
         }
@@ -126,15 +132,7 @@ fn insert_into_hashmap(
             }
         }
         None => {
-            stations.insert(
-                station_name,
-                Station {
-                    n: 1,
-                    sum: measurement,
-                    min: measurement,
-                    max: measurement,
-                },
-            );
+            stations.insert(station_name, Station::new(measurement));
         }
     }
 }
