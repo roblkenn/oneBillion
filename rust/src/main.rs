@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Lines};
 use std::path::Path;
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::Instant;
 
 const ONE_BILLION: usize = 1_000_000_000;
@@ -51,7 +51,7 @@ fn main() {
     }
 }
 
-fn start_threads(number_of_threads: usize) -> Vec<JoinHandle<HashMap<String, Station>>> {
+fn one_billion(number_of_threads: usize) {
     let partition_size = ONE_BILLION / number_of_threads;
     let mut thread_handles = Vec::with_capacity(number_of_threads);
     for partition_index in 0..number_of_threads {
@@ -70,16 +70,14 @@ fn start_threads(number_of_threads: usize) -> Vec<JoinHandle<HashMap<String, Sta
                 let measurement: f32 = line_parts.next().unwrap().parse().unwrap();
                 insert_into_hashmap(&mut stations, station_name, measurement);
             }
+
             stations
         });
         thread_handles.push(handle);
     }
-    thread_handles
-}
 
-fn merge_results(threads: Vec<JoinHandle<HashMap<String, Station>>>) -> HashMap<String, Station> {
     let mut final_stations: HashMap<String, Station> = HashMap::new();
-    for thread in threads {
+    for thread in thread_handles {
         let stations = thread.join().unwrap();
         for (station_name, station) in stations.into_iter() {
             match final_stations.get_mut(&station_name) {
@@ -92,19 +90,16 @@ fn merge_results(threads: Vec<JoinHandle<HashMap<String, Station>>>) -> HashMap<
             }
         }
     }
-    final_stations
-}
 
-fn print_results(stations: &HashMap<String, Station>) {
     print!("{{");
-    let mut station_names = stations.keys().collect::<Vec<&String>>();
+    let mut station_names = final_stations.keys().collect::<Vec<&String>>();
     station_names.sort();
     for (station_name, should_add_comma) in station_names
         .iter()
         .enumerate()
         .map(|(i, s)| (*s, i != station_names.len() - 1))
     {
-        if let Some(station) = stations.get(station_name) {
+        if let Some(station) = final_stations.get(station_name) {
             print!(
                 "{}={:.1?}/{:.1?}/{:.1?}",
                 station_name,
@@ -118,12 +113,6 @@ fn print_results(stations: &HashMap<String, Station>) {
         }
     }
     print!("}}");
-}
-
-fn one_billion(number_of_threads: usize) {
-    let threads = start_threads(number_of_threads);
-    let stations = merge_results(threads);
-    print_results(&stations);
 }
 
 fn insert_into_hashmap(
